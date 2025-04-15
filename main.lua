@@ -214,7 +214,7 @@ local function propagateChunk(chunk, startX, startY)
 end
 
 -- Generate a new chunk using WFC.
-local function generateChunk()
+local function generateChunk(cx, cy)
     local chunk = {}
     chunk.grid = {}
     for y = 1, CHUNK_H do
@@ -231,6 +231,76 @@ local function generateChunk()
             }
         end
     end
+
+    -- Helper to collapse a cell with a given tile
+local function collapseCell(cell, tileID)
+    cell.possibilities = { [tileID] = true }
+    cell.entropy = 1
+    cell.collapsed = true
+end
+
+-- Look for neighboring chunks
+local top = worldChunks[chunkKey(cx, cy - 1)]
+local bottom = worldChunks[chunkKey(cx, cy + 1)]
+local left = worldChunks[chunkKey(cx - 1, cy)]
+local right = worldChunks[chunkKey(cx + 1, cy)]
+
+-- Match top edge
+if top then
+    for x = 1, CHUNK_W do
+        local neighborCell = top.grid[CHUNK_H] and top.grid[CHUNK_H][x]
+        if neighborCell and neighborCell.collapsed then
+            local tileID = next(neighborCell.possibilities)
+            collapseCell(chunk.grid[1][x], tileID)
+        end
+    end
+end
+
+-- Match bottom edge
+if bottom then
+    for x = 1, CHUNK_W do
+        local neighborCell = bottom.grid[1] and bottom.grid[1][x]
+        if neighborCell and neighborCell.collapsed then
+            local tileID = next(neighborCell.possibilities)
+            collapseCell(chunk.grid[CHUNK_H][x], tileID)
+        end
+    end
+end
+
+-- Match left edge
+if left then
+    for y = 1, CHUNK_H do
+        local neighborCell = left.grid[y] and left.grid[y][CHUNK_W]
+        if neighborCell and neighborCell.collapsed then
+            local tileID = next(neighborCell.possibilities)
+            collapseCell(chunk.grid[y][1], tileID)
+        end
+    end
+end
+
+-- Match right edge
+if right then
+    for y = 1, CHUNK_H do
+        local neighborCell = right.grid[y] and right.grid[y][1]
+        if neighborCell and neighborCell.collapsed then
+            local tileID = next(neighborCell.possibilities)
+            collapseCell(chunk.grid[y][CHUNK_W], tileID)
+        end
+    end
+end
+
+-- After seeding edge cells, propagate all collapsed ones
+for y = 1, CHUNK_H do
+    for x = 1, CHUNK_W do
+        local cell = chunk.grid[y][x]
+        if cell.collapsed then
+            propagateChunk(chunk, x, y)
+        end
+    end
+end
+
+
+
 
     local function findLowestEntropyCell()
         local minEntropy = #allTileIDs + 1
@@ -273,7 +343,7 @@ end
 local function getChunk(cx, cy)
     local key = chunkKey(cx, cy)
     if not worldChunks[key] then
-        worldChunks[key] = generateChunk()
+        worldChunks[key] = generateChunk(cx, cy)
     end
     return worldChunks[key]
 end
